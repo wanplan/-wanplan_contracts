@@ -106,27 +106,29 @@ contract Staker is Ownable {
 
     function getReward() public view returns (int _reward){
         int sum = getUnClaimReward(msg.sender);
-        sum += balanceMap[msg.sender];
         return sum;
     }
 
-    function stake(int _num) public {
+    function stake(int _num, address _to) public {
         require(int(lpToken.balanceOf(msg.sender)) >= _num, "Error: lp token balance not enough");
         require(block.number >= startStakeHeight && block.number <= endStakeHeight, "Error: Not stake time!");
         require(!pauseStake, "Error: Stake paused!");
 
-        if (stakeNum[msg.sender] == 0) {
-            lastClaimHeightMap[msg.sender] = int(heights.length);
+        if (stakeNum[_to] != 0) {
+            balanceMap[_to] += getUnClaimReward(_to);
+        }
+        if (int(heights.length) == 0) {
+            lastClaimHeightMap[_to] = int(heights.length);
         } else {
-            lastClaimHeightMap[msg.sender] = int(heights.length) - 1;
-            balanceMap[msg.sender] += getUnClaimReward(msg.sender);
+            lastClaimHeightMap[_to] = int(heights.length) - 1;
         }
 
+
         lpToken.transferFrom(msg.sender, address(this), uint(_num));
-        stakeNum[msg.sender] += _num;
+        stakeNum[_to] += _num;
         stakeTotal += _num;
 
-        emit Stake(msg.sender, _num);
+        emit Stake(_to, _num);
     }
 
     function unStake(int _num) public {
@@ -135,11 +137,15 @@ contract Staker is Ownable {
         require(!pauseUnStake, "Error:UnStake paused!");
 
         int sum = getUnClaimReward(msg.sender);
+        if (int(heights.length) == 0) {
+            lastClaimHeightMap[msg.sender] = int(heights.length);
+        } else {
+            lastClaimHeightMap[msg.sender] = int(heights.length) - 1;
+        }
 
         balanceMap[msg.sender] += sum;
-        lastClaimHeightMap[msg.sender] = int(heights.length) - 1;
 
-        lpToken.transferFrom(address(this), msg.sender, uint(_num));
+        lpToken.transfer(msg.sender, uint(_num));
         stakeNum[msg.sender] -= _num;
         stakeTotal -= _num;
 
@@ -149,6 +155,11 @@ contract Staker is Ownable {
 
     function claim() public {
         int sum = getUnClaimReward(msg.sender);
+        if (int(heights.length) == 0) {
+            lastClaimHeightMap[msg.sender] = int(heights.length);
+        } else {
+            lastClaimHeightMap[msg.sender] = int(heights.length) - 1;
+        }
         sum += balanceMap[msg.sender];
 
         require(sum > 0, "Error:balance not enough");
@@ -156,7 +167,6 @@ contract Staker is Ownable {
         //todo:发币方式
         want.transfer(msg.sender, uint(sum));
 
-        lastClaimHeightMap[msg.sender] = int(heights.length) - 1;
         balanceMap[msg.sender] = 0;
 
         emit Claim(msg.sender, sum);
