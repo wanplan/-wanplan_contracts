@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-
-
-
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
 
@@ -185,74 +182,6 @@ interface IPancakePair {
     function initialize(address, address) external;
 }
 
-/**
- * @title SafeMath
- * @dev Math operations with safety checks that throw on error
- */
-library SafeMath {
-    /**
-    * @dev Subtracts two numbers, reverts on overflow (i.e. if subtrahend is greater than minuend).
-    */
-    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-        require(b <= a);
-        uint256 c = a - b;
-
-        return c;
-    }
-
-    /**
-    * @dev Adds two numbers, reverts on overflow.
-    */
-    function add(uint256 a, uint256 b) internal pure returns (uint256) {
-        uint256 c = a + b;
-        require(c >= a);
-
-        return c;
-    }
-
-    /**
-     * @dev Returns the multiplication of two unsigned integers, reverting on
-     * overflow.
-     *
-     * Counterpart to Solidity's `*` operator.
-     *
-     * Requirements:
-     *
-     * - Multiplication cannot overflow.
-     */
-    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
-        if (a == 0) {
-            return 0;
-        }
-
-        uint256 c = a * b;
-        require(c / a == b, "SafeMath: multiplication overflow");
-
-        return c;
-    }
-
-    /**
-     * @dev Returns the integer division of two unsigned integers. Reverts with custom message on
-     * division by zero. The result is rounded towards zero.
-     *
-     * Counterpart to Solidity's `/` operator. Note: this function uses a
-     * `revert` opcode (which leaves remaining gas untouched) while Solidity
-     * uses an invalid opcode to revert (consuming all remaining gas).
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function div(uint256 a, uint256 b) internal pure returns (uint256) {
-        require(b > 0, "SafeMath: division by zero");
-        uint256 c = a / b;
-        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
-
-        return c;
-    }
-}
-
-
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -267,15 +196,15 @@ abstract contract TradeCoin {
 }
 
 abstract contract IWant {
-    function transferFrom(address sender, address recipient, uint256 amount) virtual public returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external virtual returns (bool);
 
-    function totalSupply() public view virtual returns (uint256);
+    function totalSupply() external view virtual returns (uint256);
 
     function balanceOf(address _account) virtual view public returns (uint256);
 
-    function transfer(address _to, uint256 _value) public virtual returns (bool);
+    function transfer(address _to, uint256 _value) external virtual returns (bool);
 
-    function approve(address _spender, uint256 _value) virtual public returns (bool);
+    function approve(address _spender, uint256 _value) external virtual returns (bool);
 }
 
 
@@ -285,27 +214,23 @@ abstract contract IGM {
     function tokenOfOwner(address _owner) public view virtual returns (uint[] memory);
 }
 
-abstract contract IStake {
-    function stake(int _num, address to) public virtual;
+interface IStake {
+    function stake(uint _num, address to) external;
 }
 
 
 contract WantSale is Ownable {
 
-    using SafeMath for uint256;
+    address public wantAddr;
+    address public tradeCoinAddr;
+    address public receiverAddr;
+    address public pairAddr;
+    address public stakeAddr;
 
-    address public GMAddr;
-    address public WantAddr;
-    address public TradeCoinAddr;
-    address public ReceiverAddr;
-    address public UniswapV2RouterAddr;
-    address public PairAddr;
-    address public StakeAddr;
-
-    IGM private gm;
+    IGM public gm;
     TradeCoin private tc;
     IWant private want;
-    IUniswapV2Router01 private uniswapV2Router;
+    IUniswapV2Router01 public uniswapV2Router;
     IPancakePair private pair;
     IStake private stake;
 
@@ -317,77 +242,78 @@ contract WantSale is Ownable {
     uint256 private PeriodStartSaleHeight;
     uint256 private PeriodEndSaleHeight;
 
-    bool public PublicBuy;
-
     mapping(uint256 => uint256) private countOfGmIdBuyWant;
 
     event BuyWant(address _from, uint256 _count);
 
-    constructor(){
-        IUniswapV2Router01 _uniswapV2Router = IUniswapV2Router01(0xD99D1c33F9fC3444f8101754aBC46c52416550D1);
-        uniswapV2Router = _uniswapV2Router;
-    }
+    constructor(){}
 
-    function setGMAddr(address _addr) onlyOwner public {
-        GMAddr = _addr;
+    function setGMAddr(address _addr) external onlyOwner {
+        require(_addr != address(0), "address can not be zero!");
         gm = IGM(_addr);
     }
 
-    function setWantAddr(address _addr) onlyOwner public {
-        WantAddr = _addr;
+    function setWantAddr(address _addr) external onlyOwner {
+        require(_addr != address(0), "address can not be zero!");
+        wantAddr = _addr;
         want = IWant(_addr);
     }
 
-    function setTradeCoinAddr(address _addr) onlyOwner public {
-        TradeCoinAddr = _addr;
+    function setTradeCoinAddr(address _addr) external onlyOwner {
+        require(_addr != address(0), "address can not be zero!");
+        tradeCoinAddr = _addr;
         tc = TradeCoin(_addr);
     }
 
-    function setReceiverAddr(address _addr) onlyOwner public {
-        ReceiverAddr = _addr;
+    function setReceiverAddr(address _addr) external onlyOwner {
+        require(_addr != address(0), "address can not be zero!");
+        receiverAddr = _addr;
     }
 
-    function setUniswapV2RouterAddr(address _addr) onlyOwner public {
-        UniswapV2RouterAddr = _addr;
+    function setUniswapV2RouterAddr(address _addr) external onlyOwner {
+        require(_addr != address(0), "address can not be zero!");
         uniswapV2Router = IUniswapV2Router01(_addr);
     }
 
-    function setPairAddr(address _addr) onlyOwner public {
-        PairAddr = _addr;
+    function setPairAddr(address _addr) external onlyOwner {
+        require(_addr != address(0), "address can not be zero!");
+        pairAddr = _addr;
         pair = IPancakePair(_addr);
     }
 
-    function setStakeAddr(address _addr) onlyOwner public {
-        StakeAddr = _addr;
+    function setStakeAddr(address _addr) external onlyOwner {
+        require(_addr != address(0), "address can not be zero!");
+        stakeAddr = _addr;
         stake = IStake(_addr);
     }
 
-    function setWantPriceTradeCoin(uint256 _price) onlyOwner public {
+    function setWantPriceTradeCoin(uint256 _price) external onlyOwner {
         WantPriceTradeCoin = _price;
     }
 
-    function setWantBuyCount(uint256 _count) onlyOwner public {
+    function setWantBuyCount(uint256 _count) external onlyOwner {
         WantBuyCount = _count;
     }
 
-    function setPeriodConf(uint256 _startGmId, uint256 _endGmId, uint256 _startHeight, uint256 _endHeight) onlyOwner public {
+    function setPeriodConf(uint256 _startGmId, uint256 _endGmId, uint256 _startHeight, uint256 _endHeight) external onlyOwner {
         PeriodStartGmId = _startGmId;
         PeriodEndGmId = _endGmId;
         PeriodStartSaleHeight = _startHeight;
         PeriodEndSaleHeight = _endHeight;
     }
 
-    function getPeriodConf() public view returns (uint256 _startGmId, uint256 _endGmId, uint256 _startHeight, uint256 _endHeight) {
+    function getPeriodConf() external view returns (uint256 _startGmId, uint256 _endGmId, uint256 _startHeight, uint256 _endHeight) {
         return (PeriodStartGmId, PeriodEndGmId, PeriodStartSaleHeight, PeriodEndSaleHeight);
     }
 
-    function buy(uint256 _count) public payable {
+    function buy(uint256 _count) external {
+        require(block.number >= PeriodStartSaleHeight && block.number <= PeriodEndSaleHeight, "not sale time");
         require(want.balanceOf(address(this)) >= _count, "Error: WanT not enough");
-        require(tc.balanceOf(msg.sender) >= WantPriceTradeCoin.mul(_count) / (1 ether), "Error: usdt balance not enough");
+        require(tc.balanceOf(msg.sender) >= WantPriceTradeCoin * _count / (1 ether), "Error: usdt balance not enough");
 
         uint[] memory gmIds = gm.tokenOfOwner(msg.sender);
         (uint _remain,) = getBuyCount();
-        require (_remain >= _count, "over max count");
+        require(_remain >= _count, "over max count");
         uint256 _tmp = _count;
         for (uint i = 0; i < gmIds.length; i++) {
             if (_tmp == 0) {
@@ -405,35 +331,35 @@ contract WantSale is Ownable {
             }
         }
 
-        tc.transferFrom(msg.sender, ReceiverAddr, WantPriceTradeCoin.mul(_count) / (1 ether));
+        tc.transferFrom(msg.sender, receiverAddr, WantPriceTradeCoin * _count / (1 ether));
 
         (uint reserveA, uint reserveB,) = pair.getReserves();
         uint _li = 0;
-        if (WantAddr < TradeCoinAddr) {
-            tc.transferFrom(msg.sender, address(this), _count.mul(reserveB) / reserveA);
-            _li = _addLiq(_count, _count.mul(reserveB) / reserveA, 0, 0, address(this));
+        if (wantAddr == pair.token0()) {
+            tc.transferFrom(msg.sender, address(this), _count * reserveB / reserveA);
+            _li = _addLiq(_count, _count * reserveB / reserveA, 0, 0, address(this));
         } else {
-            tc.transferFrom(msg.sender, address(this), _count.mul(reserveA) / reserveB);
-            _li = _addLiq(_count, _count.mul(reserveA) / reserveB, 0, 0, address(this));
+            tc.transferFrom(msg.sender, address(this), _count * reserveA / reserveB);
+            _li = _addLiq(_count, _count * reserveA / reserveB, 0, 0, address(this));
         }
 
-        pair.approve(StakeAddr, _li);
-        stake.stake(int(_li), msg.sender);
+        pair.approve(stakeAddr, _li);
+        stake.stake(_li, msg.sender);
         emit BuyWant(msg.sender, _count);
     }
 
-    function getAddLiq(uint _count) view public returns (uint r1, uint r2){
+    function getAddLiq(uint _count) external view returns (uint r1, uint r2){
         (uint reserveA, uint reserveB,) = pair.getReserves();
-        if (WantAddr < TradeCoinAddr) {
-            return (_count, _count.mul(reserveB) / reserveA);
+        if (wantAddr < tradeCoinAddr) {
+            return (_count, _count * reserveB / reserveA);
         }
-        return (_count, _count.mul(reserveA) / reserveB);
+        return (_count, _count * reserveA / reserveB);
     }
 
-    function _addLiq(uint256 _a1, uint256 _a2, uint256 _b1, uint256 _b2, address _to) private returns (uint _li) {
+    function _addLiq(uint256 _a1, uint256 _a2, uint256 _b1, uint256 _b2, address _to) internal returns (uint _li) {
         want.approve(address(uniswapV2Router), _a1);
         tc.approve(address(uniswapV2Router), _a2);
-        (,,_li) = uniswapV2Router.addLiquidity(WantAddr, TradeCoinAddr, _a1, _a2, _b1, _b2, _to, block.timestamp);
+        (,, _li) = uniswapV2Router.addLiquidity(wantAddr, tradeCoinAddr, _a1, _a2, _b1, _b2, _to, block.timestamp);
     }
 
     function getBuyCount() public view returns (uint256 _remain, uint _total) {
@@ -448,7 +374,7 @@ contract WantSale is Ownable {
         return (_remain, _total);
     }
 
-    function getCountByGmId(uint256 _gmId) public view returns (uint256 _count) {
+    function getCountByGmId(uint256 _gmId) external view returns (uint256 _count) {
         return countOfGmIdBuyWant[_gmId];
     }
 }

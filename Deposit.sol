@@ -3,40 +3,40 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 abstract contract ILPToken {
-    function balanceOf(address account) virtual view public returns (uint256);
+    function approve(address spender, uint value) virtual external returns (bool);
 
-    function transferFrom(address sender, address recipient, uint256 amount) virtual public returns (bool);
+    function transfer(address to, uint value) virtual external returns (bool);
 
-    function approve(address _spender, uint256 _value) virtual public returns (bool);
+    function transferFrom(address from, address to, uint value) virtual external returns (bool);
 
-    function transfer(address _to, uint256 _value) virtual public returns (bool);
+    function balanceOf(address owner) virtual external view returns (uint);
 }
 
 abstract contract IWant {
-    function mint(address account) virtual external returns (uint);
+    function mint(address account) external virtual returns (uint);
 
-    function totalSupply() public view virtual returns (uint256);
+    function totalSupply() external view virtual returns (uint256);
 
-    function transferFrom(address sender, address recipient, uint256 amount) virtual public returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external virtual returns (bool);
 
-    function balanceOf(address _account) virtual view public returns (uint256);
+    function balanceOf(address _account) public virtual view  returns (uint256);
 
-    function transfer(address _to, uint256 _value) public virtual returns (bool);
+    function transfer(address _to, uint256 _value) external virtual returns (bool);
 }
 
     struct HeightProfit {
-        int startHeight; //高度
-        int height; //高度
-        int ratio;  //分配数额
-        int total;  //总质押量
+        uint startHeight; //高度
+        uint height; //高度
+        uint ratio;  //分配数额
+        uint total;  //总质押量
     }
 
 contract Staker is Ownable {
-    address public LPTokenAddr;
-    address public WantAddr;
+
+    address public lPTokenAddr;
+    address public wantAddr;
 
     uint public startStakeHeight;
     uint public endStakeHeight;
@@ -46,106 +46,104 @@ contract Staker is Ownable {
     bool public pauseStake;
     bool public pauseUnStake;
 
-    int public stakeTotal;
+    uint public stakeTotal;
 
-    mapping(address => int) public lastClaimHeightMap;
-    mapping(address => int) public stakeNum;
-    mapping(address => int) public balanceMap;
+    mapping(address => uint) public lastClaimHeightMap;
+    mapping(address => uint) public stakeNum;
+    mapping(address => uint) public balanceMap;
     mapping(uint => uint) public heightRatio;
 
     HeightProfit[] private heights;
-
     ILPToken private lpToken;
     IWant private want;
 
-    event Stake(address _addr, int _num);
-    event UnStake(address _addr, int _num);
-    event Claim(address _addr, int _num);
+    event Stake(address _addr, uint _num);
+    event UnStake(address _addr, uint _num);
+    event Claim(address _addr, uint _num);
 
 
-    function pauseDep() onlyOwner public {
+    function pauseDep() external onlyOwner {
         pauseStake = true;
     }
 
-    function unpauseDep() onlyOwner public {
+    function unpauseDep() external onlyOwner {
         pauseStake = false;
     }
 
-    function pauseUnDep() onlyOwner public {
+    function pauseUnDep() external onlyOwner {
         pauseUnStake = true;
     }
 
-    function unpauseUnDep() onlyOwner public {
+    function unpauseUnDep() external onlyOwner {
         pauseUnStake = false;
     }
 
-    function setLPTokenAddr(address _addr) onlyOwner public {
-        LPTokenAddr = _addr;
+    function setLPTokenAddr(address _addr) external onlyOwner {
+        require(_addr != address(0), "address can not be zero!");
+        lPTokenAddr = _addr;
         lpToken = ILPToken(_addr);
     }
 
-    function setWantAddr(address _addr) onlyOwner public {
-        WantAddr = _addr;
+    function setWantAddr(address _addr) external onlyOwner {
+        require(_addr != address(0), "address can not be zero!");
+        wantAddr = _addr;
         want = IWant(_addr);
     }
 
-    function setPeriodConf(uint _startHeight, uint _endHeight, uint _startUnHeight, uint _endUnHeight) onlyOwner public {
+    function setPeriodConf(uint _startHeight, uint _endHeight, uint _startUnHeight, uint _endUnHeight) external onlyOwner {
         startStakeHeight = _startHeight;
         endStakeHeight = _endHeight;
         startUnStakeHeight = _startUnHeight;
         endUnStakeHeight = _endUnHeight;
     }
 
-    function setHeightProfit(int _ratio) onlyOwner public {
+    function setHeightProfit(uint _ratio) external onlyOwner {
         if (heights.length == 0) {
-            heights.push(HeightProfit(0, int(block.number), _ratio, stakeTotal));
+            heights.push(HeightProfit(0, block.number, _ratio, stakeTotal));
         } else {
-            heights.push(HeightProfit(heights[heights.length - 1].height + 1, int(block.number), _ratio, stakeTotal));
+            heights.push(HeightProfit(heights[heights.length - 1].height + 1, block.number, _ratio, stakeTotal));
         }
     }
 
-    function getReward() public view returns (int _reward){
-        int sum = getUnClaimReward(msg.sender);
-        return sum;
-    }
-
-    function stake(int _num, address _to) public {
-        require(int(lpToken.balanceOf(msg.sender)) >= _num, "Error: lp token balance not enough");
+    function stake(uint _num, address _to) external {
+        require(_num > 0, "num must greater than zero");
+        require(lpToken.balanceOf(msg.sender) >= _num, "Error: lp token balance not enough");
         require(block.number >= startStakeHeight && block.number <= endStakeHeight, "Error: Not stake time!");
         require(!pauseStake, "Error: Stake paused!");
 
         if (stakeNum[_to] != 0) {
             balanceMap[_to] += getUnClaimReward(_to);
         }
-        if (int(heights.length) == 0) {
-            lastClaimHeightMap[_to] = int(heights.length);
+        if (heights.length == 0) {
+            lastClaimHeightMap[_to] = heights.length;
         } else {
-            lastClaimHeightMap[_to] = int(heights.length) - 1;
+            lastClaimHeightMap[_to] = heights.length - 1;
         }
 
 
-        lpToken.transferFrom(msg.sender, address(this), uint(_num));
+        lpToken.transferFrom(msg.sender, address(this), _num);
         stakeNum[_to] += _num;
         stakeTotal += _num;
 
         emit Stake(_to, _num);
     }
 
-    function unStake(int _num) public {
+    function unStake(uint _num) external {
+        require(_num > 0, "num must greater than zero");
         require(stakeNum[msg.sender] >= _num, "Error:stake lpToken balance not enough");
         require(block.number >= startUnStakeHeight && block.number <= endUnStakeHeight, "Error: Not stake time!");
         require(!pauseUnStake, "Error:UnStake paused!");
 
-        int sum = getUnClaimReward(msg.sender);
-        if (int(heights.length) == 0) {
-            lastClaimHeightMap[msg.sender] = int(heights.length);
+        uint sum = getUnClaimReward(msg.sender);
+        if (heights.length == 0) {
+            lastClaimHeightMap[msg.sender] = heights.length;
         } else {
-            lastClaimHeightMap[msg.sender] = int(heights.length) - 1;
+            lastClaimHeightMap[msg.sender] = heights.length - 1;
         }
 
         balanceMap[msg.sender] += sum;
 
-        lpToken.transfer(msg.sender, uint(_num));
+        lpToken.transfer(msg.sender, _num);
         stakeNum[msg.sender] -= _num;
         stakeTotal -= _num;
 
@@ -153,56 +151,54 @@ contract Staker is Ownable {
     }
 
 
-    function claim() public {
-        int sum = getUnClaimReward(msg.sender);
-        if (int(heights.length) == 0) {
-            lastClaimHeightMap[msg.sender] = int(heights.length);
+    function claim() external {
+        uint sum = getUnClaimReward(msg.sender);
+        if (heights.length == 0) {
+            lastClaimHeightMap[msg.sender] = heights.length;
         } else {
-            lastClaimHeightMap[msg.sender] = int(heights.length) - 1;
+            lastClaimHeightMap[msg.sender] = heights.length - 1;
         }
         sum += balanceMap[msg.sender];
 
         require(sum > 0, "Error:balance not enough");
 
         //todo:发币方式
-        want.transfer(msg.sender, uint(sum));
+        want.transfer(msg.sender, sum);
 
         balanceMap[msg.sender] = 0;
 
         emit Claim(msg.sender, sum);
     }
 
-    function getAvailable() public view returns (int _available) {
-        int sum = getUnClaimReward(msg.sender);
-        sum += balanceMap[msg.sender];
-        return sum;
+    function getAvailable() external view returns (uint _available) {
+        _available = getUnClaimReward(msg.sender);
+        _available += balanceMap[msg.sender];
+        return _available;
     }
 
-    function getLatestInterest() public view returns (int _interest) {
+    function getLatestInterest() external view returns (uint _interest) {
         if (heights.length == 0) {
             return 0;
         }
         return heights[heights.length - 1].ratio;
     }
 
-    function getUnClaimReward(address _owner) internal view returns (int _reward){
-        int index = lastClaimHeightMap[_owner];
-        int sum;
-        for (int i = index + 1; i < int(heights.length); i++) {
-            sum += stakeNum[_owner] * heights[uint(i)].ratio;
+    function getUnClaimReward(address _owner) internal view returns (uint _reward){
+        uint index = lastClaimHeightMap[_owner];
+        for (uint i = index + 1; i < heights.length; i++) {
+            _reward += stakeNum[_owner] * heights[i].ratio;
         }
-        return sum;
+        return _reward;
     }
 
-    function getAllReward() public view returns (int _reward) {
-        int sum;
-        for (int i = 0; i < int(heights.length); i++) {
-            sum += heights[uint(i)].total * heights[uint(i)].ratio;
+    function getAllReward() external view returns (uint _reward) {
+        for (uint i = 0; i < heights.length; i++) {
+            _reward += heights[i].total * heights[i].ratio;
         }
-        return sum;
+        return _reward;
     }
 
-    function withdrawLP(address _addr) public onlyOwner {
+    function withdrawLP(address _addr) external onlyOwner {
         lpToken.transfer(_addr, lpToken.balanceOf(address(this)));
     }
 
